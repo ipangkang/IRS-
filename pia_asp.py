@@ -5,7 +5,7 @@ def PIA_ASP(y, A, sp):
     set_prior = set()
     T, M, N = A.shape
     # M, N = A.shape
-    KK = 5     # max iteration number
+    KK = 8  # max iteration number
     R = {}
     set_pie = {}
     x_s = {}
@@ -28,6 +28,7 @@ def PIA_ASP(y, A, sp):
             sp = 0
         resid_record = 0
         while i <= KK:
+            # print(i)
             s_wan = sp - len(set_prior & set_pie[t][i-1])
             if s_wan >= 0:
                 # print(A[t].T)
@@ -108,8 +109,11 @@ def PIA_ASP(y, A, sp):
                 x_s[t] = x_wan[t][i-1]
                 set_s[t] = set_wan[t][i-1]
                 s += 1
-            # if np.linalg.norm(resid) < 1e-15:
-            #     print(np.linalg.norm(resid))
+
+            if np.linalg.norm(resid) / np.linalg.norm(y[t]) < 1e-10:
+                break
+            # if np.linalg.norm(resid) / np.linalg.norm(y[t])< 1e-5:
+            #     # print(np.linalg.norm(resid))
             #     resid_array.append(np.linalg.norm(resid))
             #     set_out[t] = set_s[t]
             #     x_out[t] = x_s[t]
@@ -118,8 +122,10 @@ def PIA_ASP(y, A, sp):
             #     for ii in range(len(set_out[t])):
             #         x_out_array[t][list(set_out[t])[ii]] = x_out[t][ii][0]
             #     # print(len(set_out[t]))
-            #     break
+            #     return x_out_array, resid_array
+
             resid_record = np.linalg.norm(resid)
+        # print('resid',resid_record)
         resid_array.append(resid_record)
             # print(np.linalg.norm(resid))
         # print(len(set_s[t]))

@@ -5,7 +5,7 @@ import random
 T = 100
 # y = np.random.random([T, 256, 1])
 # A = np.random.random([T, 256, 1000])
-sp = 10
+sp = 0
 K = 10
 A = np.random.random([T, 256, 1000])
 theta = np.zeros([T, 1000, 1])
@@ -20,7 +20,8 @@ y = np.zeros([T, 256, 1])
 for t in range(T):
     y[t] = np.dot(A[t], theta[t])
 print(y.shape)
-PIA_ASP(y, A, sp)
+x_out_array, resid_array = PIA_ASP(y, A, sp)
+print(resid_array[-1])
 
 # y = A \theta
 # T is time slot

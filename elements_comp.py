@@ -2,7 +2,9 @@ import numpy as np
 import math as math
 import pia_asp as pa
 import dataset as dataset
+from matplotlib import pyplot as plt
 import copy
+import time
 
 # def G as channel gain with size (M * N)
 # def Theta as IRS elements with size(N * N) and Theta = diag(theta_1, theta_2, ..., theta_N)
@@ -32,19 +34,11 @@ XL = [8.5e-10] * N
 theta_array = np.linspace(0, 2 * math.pi, 10)
 
 
-#
-# def derivativeTheta(i, n, x, t):
-#     sumHX = 0
-#     for j in range(K):
-#         sumHX += Hr[t][n][j] * x[t][j]
-#     return G[t][i][n] * sumHX
-
-
-def optimize(n, x, t, the, theta_w, theta_record):
+def optimize(n, x, t, the, theta_w, theta_record, num):
     min_sum = 999
     min_theta = 0
-    theta_matrix = np.zeros([N, N], dtype=complex)
-    for i in range(N):
+    theta_matrix = np.zeros([num, num], dtype=complex)
+    for i in range(num):
         theta_matrix[i][i] = math.cos(the[i]) + 1j * math.sin(the[i])
 
     for th in theta_array:
@@ -52,13 +46,12 @@ def optimize(n, x, t, the, theta_w, theta_record):
         A = np.zeros([T, M, NN], dtype=complex)
 
         for t in range(T):
-            A[t] = np.dot(np.dot(G[t], theta_matrix), Hr[t]) + Hd[t]
-        # print(A.shape)
+            A[t] = np.dot(np.dot(G[t, :, 0:num], theta_matrix), Hr[t, 0:num, :]) + Hd[t]  # print(A.shape)
         y = np.zeros([T, M, 1], dtype=complex)
         for t in range(T):
             y[t] = np.dot(A[t], x[t])
         # print(y.shape)
-        x_array, resid_array = pa.PIA_ASP(y, A, sp=0)
+        x_array, resid_array = pa.PIA_ASP(y, A, sp=50)
         # print(resid_array)
         sum_else = XL[n] * abs(th - theta_w[n]) + (rho + L) / 2 * np.linalg.norm(th - theta_w[n])
         # sum_else = XL[n] * (th - theta_w[n]) + (rho + L) / 2 * np.linalg.norm(th - theta_w[n])
@@ -79,73 +72,18 @@ def optimize(n, x, t, the, theta_w, theta_record):
     return min_theta
 
 
-#
-# def comparison(x, theta_best):
-#     theta_matrix = [[0.0 + 1j * 0.0] * N for _ in range(N)]
-#     for i in range(N):
-#         theta_matrix[i][i] = math.cos(theta_best[i])  # + 1j * math.sin(the[i])
-#
-#     A = np.zeros([T, M, NN])
-#     for t in range(T):
-#         A[t] = np.dot(np.dot(G[t], theta_matrix), Hr[t]) + Hd[t]
-#     # print(A.shape)
-#     y = np.zeros([T, M, 1])
-#     for t in range(T):
-#         y[t] = np.dot(A[t], x[t])
-#     _, resid_array = pa.PIA_ASP(y, A, sp=50)
-#     r = resid_array[-1]
-#
-#     print(r)
-#
-#     theta_matrix = [[0.0] * N for _ in range(N)]
-#     for i in range(N):
-#         theta_matrix[i][i] = 1  # + 1j * math.sin(the[i])
-#
-#     A = np.zeros([T, M, NN])
-#     for t in range(T):
-#         A[t] = np.dot(np.dot(G[t], theta_matrix), Hr[t]) + Hd[t]
-#     # print(A.shape)
-#     y = np.zeros([T, M, 1])
-#     for t in range(T):
-#         y[t] = np.dot(A[t], x[t])
-#     _, resid_array = pa.PIA_ASP(y, A, sp=50)
-#     r_old = resid_array[-1]
-#     print('r_old', r_old)
-#
-
-def iteration(tt):
-    theta = [0.1] * N
-    theta_wan = [0.0] * N
-    iteration_number = 4
-    theta_record = [0.0] * N
+def iteration(tt, num):
+    theta = [0.1] * num
+    theta_wan = [0.0] * num
+    iteration_number = 10
+    theta_record = [0.0] * num
     # # 1. get x
     x = dataset.setRelativity(NN, T, K, KK)
-
-    # # print(x.shape)
-
-    # # A = np.dot(np.dot(G, np.diag(theta)), Hr) + Hd
-    # A = np.zeros([T, M, NN])
-    # for t in range(T):
-    #     A[t] = np.dot(np.dot(G[t], np.diag(theta)), Hr[t]) + Hd[t]
-    # # print(A.shape)
-    # y = np.zeros([T, M, 1])
-    # for t in range(T):
-    #     y[t] = np.dot(A[t], x[t])
-    # # print(y.shape)
-    # x_array = pa.PIA_ASP(y, A, sp=20)
-    # for n in range(N):
-    #     print('n',n)
-    #     theta[n] = optimize(n,x,tt,theta)
-    #     print(theta)
-
-    # comparison(x, theta)
-    # for i in range(len(x_array)):
-    #     print(x_array[i])
 
     # 2. get global theta
     for i in range(iteration_number):
         # print('迭代')
-        for n in range(N):
+        for n in range(num):
             theta[n] = (XL[n] / rho + theta_wan[n]) % (2 * math.pi)
 
         # theta_wan = copy.copy(theta)
@@ -153,21 +91,22 @@ def iteration(tt):
         #     theta[n] = XL[n] / rho + theta_wan[n]
 
         # 3. update global theta
-        theta_tmp = [0] * N
+        theta_tmp = [0] * num
         for n in range(len(theta)):
-            theta_tmp[n] = optimize(n, x, tt, theta, theta_wan, theta_record) % (2 * math.pi)
+            theta_tmp[n] = optimize(n, x, tt, theta, theta_wan, theta_record, num) % (2 * math.pi)
 
         theta_wan = theta_tmp
         # print(theta_wan)
         # 4. Lagrange multipliers update
-        for n in range(len(XL)):
+        for n in range(num):
             XL[n] += rho * (theta_wan[n] - theta[n])
 
         # print(theta_wan)
         # print('theta', theta)
-        theta_record = theta.copy()
-        # # print('XL', XL)
+        # theta_record = theta.copy()
+        # print('XL', XL)
         # print()
+
     # np.save('theta.npy', theta)
     # np.save('x.npy', x)
     return theta, x
@@ -178,7 +117,7 @@ def iteration(tt):
     #   3.2 calculate
 
 
-def comp(theta, xx):
+def comp(theta, xx, num):
     A_old = np.zeros([T, M, NN], dtype=complex)
     A_new = np.zeros([T, M, NN], dtype=complex)
     theta_matrix = np.diag(theta)
@@ -186,27 +125,45 @@ def comp(theta, xx):
         # A[t] = np.dot(np.dot(G[t], theta_matrix), Hr[t]) + Hd[t]
         A_old[t] = Hd[t]
         # 这个应该是由theta_optimization 来决定的  A_new[t] = np.dot(np.dot(G[t], theta_matrix), Hr[t]) + Hd[t]
-        A_new[t] = np.dot(np.dot(G[t], theta_matrix), Hr[t]) + Hd[t]
-        # print(A_new[t].shape)
+        A_new[t] = np.dot(np.dot(G[t, :, 0:num], theta_matrix), Hr[t, 0:num, :]) + Hd[t]
         y_old = np.zeros([T, M, 1], dtype=complex)
         y_new = np.zeros([T, M, 1], dtype=complex)
 
         for t in range(T):
             y_old[t] = np.dot(A_old[t], xx[t])
             y_new[t] = np.dot(A_new[t], xx[t])
-
-        x_array_old, resid_array_old = pa.PIA_ASP(y_old, A_old, sp=0)
-        x_array_new, resid_array_new = pa.PIA_ASP(y_new, A_new, sp=0)
+        before = time.time()
+        x_array_old, resid_array_old = pa.PIA_ASP(y_old, A_old, sp=50)
+        after = time.time()
+        print('old', after-before)
+        before = time.time()
+        x_array_new, resid_array_new = pa.PIA_ASP(y_new, A_new, sp=50)
+        after = time.time()
+        print('new', after-before)
         resid_old = resid_array_old[-1]
         resid_new = resid_array_new[-1]
 
-        print('resid_old', resid_array_old[-1] / np.linalg.norm(A_old[t]))
-        print('resid_new', resid_array_new[-1] / np.linalg.norm(A_new[t]), end='\t')
+        # print('resid_old', resid_array_old[-1] / np.linalg.norm(A_old[t]))
+        # print('resid_new', resid_array_new[-1] / np.linalg.norm(A_new[t]))
+        # print('resid_old', resid_array_old[-1] / np.linalg.norm(y_old[t]))
+        # print('resid_new', resid_array_new[-1] / np.linalg.norm(y_new[t]))
+        return resid_array_old[-1] / np.linalg.norm(y_old[t]), resid_array_new[-1] / np.linalg.norm(y_new[t])
 
-
-# 对比residue
-if __name__ == "__main__":
-    theta, x = iteration(0)
-    comp(theta, x)
 
 # 对比number of elements
+if __name__ == "__main__":
+    num_array = range(0,41,5)
+    resid_new_record = []
+    resid_old_record = []
+    for num in num_array:
+        theta, x = iteration(0, num=num)
+        ol, ne = comp(theta, x, num=num)
+        resid_new_record.append(ne)
+        resid_old_record.append(ol)
+    xaxis = np.arange(len(resid_new_record))
+    plt.plot(num_array, resid_new_record)
+    plt.plot(num_array, resid_old_record)
+    print(resid_old_record)
+    plt.show()
+#
+
